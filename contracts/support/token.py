@@ -10,8 +10,6 @@ from ontology.interop.Ontology.Runtime import Base58ToAddress
 
 TransferEvent = RegisterAction("transfer", "from", "to", "amount")
 ApprovalEvent = RegisterAction("approval", "owner", "spender", "amount")
-SetPendingOwnershipEvent = RegisterAction("setPendingOwner", "oldOwner", "pendingOwner")
-AcceptPendingOwnershipEvent = RegisterAction("acceptPendingOwner", "oldOwner", "newOwner")
 
 ctx = GetContext()
 
@@ -19,14 +17,11 @@ NAME = 'MyToken'
 SYMBOL = 'MYT'
 DECIMALS = 9
 FACTOR = 1000000000
-OWNER = Base58ToAddress("AQf4Mzu1YJrhz9f3aRkkwSm9n3qhXGSh4p")
-ZERO_ADDRESS = bytearray(b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00')
+OWNER = Base58ToAddress("AbtTQJYKfQxq4UdygDsbLVjE8uRrJ2H3tP")
 TOTAL_AMOUNT = 1000000000
 BALANCE_PREFIX = bytearray(b'\x01')
 APPROVE_PREFIX = bytearray(b'\x02')
-OWNER_KEY = bytearray(b'\x03')
-PENDING_OWNER_KEY = bytearray(b'\x04')
-SUPPLY_KEY = bytearray(b'\x05')
+SUPPLY_KEY = bytearray(b'\x03')
 
 
 def Main(operation, args):
@@ -38,14 +33,6 @@ def Main(operation, args):
     # 'init' has to be invokded first after deploying the contract to store the necessary and important info in the blockchain
     if operation == 'init':
         return init()
-    if operation == 'setPendingOwner':
-        return setPendingOwner(args[0])
-    if operation == 'acceptPendingOwner':
-        return acceptPendingOwner()
-    if operation == 'getOwner':
-        return getOwner()
-    if operation == 'getPendingOwner':
-        return getPendingOwner()
     if operation == 'name':
         return name()
     if operation == 'symbol':
@@ -66,7 +53,7 @@ def Main(operation, args):
             from_acct = args[0]
             to_acct = args[1]
             amount = args[2]
-            return transfer(from_acct,to_acct,amount)
+            return transfer(from_acct, to_acct, amount)
     if operation == 'transferMulti':
         return transferMulti(args)
     if operation == 'transferFrom':
@@ -80,17 +67,18 @@ def Main(operation, args):
     if operation == 'approve':
         if len(args) != 3:
             return False
-        owner  = args[0]
+        owner = args[0]
         spender = args[1]
         amount = args[2]
-        return approve(owner,spender,amount)
+        return approve(owner, spender, amount)
     if operation == 'allowance':
         if len(args) != 2:
             return False
         owner = args[0]
         spender = args[1]
-        return allowance(owner,spender)
+        return allowance(owner, spender)
     return False
+
 
 def init():
     """
@@ -104,38 +92,13 @@ def init():
         Notify("Already initialized!")
         return False
     else:
+        assert (CheckWitness(OWNER))
         total = TOTAL_AMOUNT * FACTOR
         Put(ctx, SUPPLY_KEY, total)
         Put(ctx, concat(BALANCE_PREFIX, OWNER), total)
-        Put(ctx, OWNER_KEY, OWNER)
         TransferEvent("", OWNER, total)
         return True
 
-
-def setPendingOwner(pendingOwner):
-    oldOwner = getOwner()
-    assert (CheckWitness(oldOwner))
-    assert (len(pendingOwner) == 20 and pendingOwner != ZERO_ADDRESS)
-    Put(GetContext(), PENDING_OWNER_KEY, pendingOwner)
-    SetPendingOwnershipEvent(oldOwner, pendingOwner)
-    return True
-
-
-def acceptPendingOwner():
-    pendingOwner = getPendingOwner()
-    assert (CheckWitness(pendingOwner))
-    oldOwner = getOwner()
-    Put(GetContext(), OWNER_KEY, pendingOwner)
-    AcceptPendingOwnershipEvent(oldOwner, pendingOwner)
-    return True
-
-
-def getOwner():
-    return Get(GetContext(), OWNER_KEY)
-
-
-def getPendingOwner():
-    return Get(GetContext(), PENDING_OWNER_KEY)
 
 def name():
     """
@@ -245,7 +208,7 @@ def approve(owner, spender, amount):
     return True
 
 
-def transferFrom(spender,from_acct,to_acct,amount):
+def transferFrom(spender, from_acct, to_acct, amount):
     """
     spender spends amount of tokens on the behalf of from_acct, spender makes a transaction of amount of tokens
     from from_acct to to_acct
