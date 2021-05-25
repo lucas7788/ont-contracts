@@ -1,6 +1,6 @@
 OntCversion = '2.0.0'
 """
-oUSDT denotes the cross chain USDT asset on Ontology, which is same as USDT in Ethereum
+APC Token
 """
 from ontology.interop.System.Storage import GetContext, Get, Put, Delete
 from ontology.interop.System.Runtime import CheckWitness
@@ -73,14 +73,11 @@ def Main(operation, args):
         owner = args[0]
         spender = args[1]
         return allowance(owner, spender)
-
-    if operation == "getProxyHash":
-        return getProxyHash()
     return False
 
 def init():
     supply = Get(GetContext(), TOTAL_SUPPLY_KEY)
-    assert(supply == 0, "has init")
+    assert(supply == 0)
     total = TotalSupply * FACTOR
     Put(GetContext(), TOTAL_SUPPLY_KEY, total)
     Put(GetContext(), concat(BALANCE_PREFIX, Admin), total)
