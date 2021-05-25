@@ -1,27 +1,30 @@
 OntCversion = '2.0.0'
 """
-An Example of OEP-4
+oUSDT denotes the cross chain USDT asset on Ontology, which is same as USDT in Ethereum
 """
 from ontology.interop.System.Storage import GetContext, Get, Put, Delete
-from ontology.interop.System.Runtime import Notify, CheckWitness
+from ontology.interop.System.Runtime import CheckWitness
 from ontology.interop.System.Action import RegisterAction
 from ontology.builtins import concat
 from ontology.interop.Ontology.Runtime import Base58ToAddress
 
 TransferEvent = RegisterAction("transfer", "from", "to", "amount")
 ApprovalEvent = RegisterAction("approval", "owner", "spender", "amount")
+TransferOwnershipEvent = RegisterAction("transferOwnership", "oldOwner", "newOwner")
 
 ctx = GetContext()
 
-NAME = 'OST-1'
-SYMBOL = 'pwOST'
-DECIMALS = 18
-FACTOR = 1000000000000000000
-OWNER = Base58ToAddress("AbtTQJYKfQxq4UdygDsbLVjE8uRrJ2H3tP")
-TOTAL_AMOUNT = 200000
+NAME = 'APC'
+SYMBOL = 'ZAPC'
+DECIMALS = 6
+FACTOR = 1000000
+TotalSupply = 1000000000
+Admin = Base58ToAddress("ARGK44mXXZfU6vcdSfFKMzjaabWxyog1qb")
+ZERO_ADDRESS = bytearray(b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00')
+
 BALANCE_PREFIX = bytearray(b'\x01')
 APPROVE_PREFIX = bytearray(b'\x02')
-SUPPLY_KEY = bytearray(b'\x03')
+TOTAL_SUPPLY_KEY = bytearray(b'\x03')
 
 
 def Main(operation, args):
@@ -30,7 +33,6 @@ def Main(operation, args):
     :param args:
     :return:
     """
-    # 'init' has to be invokded first after deploying the contract to store the necessary and important info in the blockchain
     if operation == 'init':
         return init()
     if operation == 'name':
@@ -42,63 +44,48 @@ def Main(operation, args):
     if operation == 'totalSupply':
         return totalSupply()
     if operation == 'balanceOf':
-        if len(args) != 1:
-            return False
+        assert (len(args) == 1)
         acct = args[0]
         return balanceOf(acct)
     if operation == 'transfer':
-        if len(args) != 3:
-            return False
-        else:
-            from_acct = args[0]
-            to_acct = args[1]
-            amount = args[2]
-            return transfer(from_acct, to_acct, amount)
+        assert (len(args) == 3)
+        from_acct = args[0]
+        to_acct = args[1]
+        amount = args[2]
+        return transfer(from_acct, to_acct, amount)
     if operation == 'transferMulti':
         return transferMulti(args)
     if operation == 'transferFrom':
-        if len(args) != 4:
-            return False
+        assert (len(args) == 4)
         spender = args[0]
         from_acct = args[1]
         to_acct = args[2]
         amount = args[3]
-        return transferFrom(spender,from_acct,to_acct,amount)
+        return transferFrom(spender, from_acct, to_acct, amount)
     if operation == 'approve':
-        if len(args) != 3:
-            return False
+        assert (len(args) == 3)
         owner = args[0]
         spender = args[1]
         amount = args[2]
         return approve(owner, spender, amount)
     if operation == 'allowance':
-        if len(args) != 2:
-            return False
+        assert (len(args) == 2)
         owner = args[0]
         spender = args[1]
         return allowance(owner, spender)
+
+    if operation == "getProxyHash":
+        return getProxyHash()
     return False
 
-
 def init():
-    """
-    initialize the contract, put some important info into the storage in the blockchain
-    :return:
-    """
-    if len(OWNER) != 20:
-        Notify(["Owner illegal!"])
-        return False
-    if Get(ctx, SUPPLY_KEY):
-        Notify("Already initialized!")
-        return False
-    else:
-        assert (CheckWitness(OWNER))
-        total = TOTAL_AMOUNT * FACTOR
-        Put(ctx, SUPPLY_KEY, total)
-        Put(ctx, concat(BALANCE_PREFIX, OWNER), total)
-        TransferEvent("", OWNER, total)
-        return True
-
+    supply = Get(GetContext(), TOTAL_SUPPLY_KEY)
+    assert(supply == 0, "has init")
+    total = TotalSupply * FACTOR
+    Put(GetContext(), TOTAL_SUPPLY_KEY, total)
+    Put(GetContext(), concat(BALANCE_PREFIX, Admin), total)
+    TransferEvent(ZERO_ADDRESS, Admin, total)
+    return True
 
 def name():
     """
@@ -125,7 +112,7 @@ def totalSupply():
     """
     :return: the total supply of the token
     """
-    return Get(ctx, SUPPLY_KEY) + 0
+    return Get(ctx, TOTAL_SUPPLY_KEY) + 0
 
 
 def balanceOf(account):
@@ -133,8 +120,7 @@ def balanceOf(account):
     :param account:
     :return: the token balance of account
     """
-    if len(account) != 20:
-        raise Exception("address length error")
+    assert (len(account) == 20)
     return Get(ctx, concat(BALANCE_PREFIX, account)) + 0
 
 
@@ -146,15 +132,16 @@ def transfer(from_acct, to_acct, amount):
     :param amount: the amount of the tokens to be transferred, >= 0
     :return: True means success, False or raising exception means failure.
     """
-    if len(to_acct) != 20 or len(from_acct) != 20:
-        raise Exception("address length error")
-    if CheckWitness(from_acct) == False or amount < 0:
-        return False
+    assert (len(to_acct) == 20)
+    assert (len(from_acct) == 20)
+    assert (CheckWitness(from_acct))
+    assert (amount > 0)
 
-    fromKey = concat(BALANCE_PREFIX,from_acct)
-    fromBalance = Get(ctx,fromKey)
-    if amount > fromBalance:
-        return False
+    fromKey = concat(BALANCE_PREFIX, from_acct)
+    fromBalance = Get(ctx, fromKey)
+
+    assert (fromBalance >= amount)
+
     if amount == fromBalance:
         Delete(ctx, fromKey)
     else:
@@ -175,12 +162,11 @@ def transferMulti(args):
     :return: True means success, False or raising exception means failure.
     """
     for p in args:
-        if len(p) != 3:
-            # return False is wrong
-            raise Exception("transferMulti params error.")
-        if transfer(p[0], p[1], p[2]) == False:
-            # return False is wrong since the previous transaction will be successful
-            raise Exception("transferMulti failed.")
+        assert (len(p) == 3)
+        assert (transfer(p[0], p[1], p[2]))
+
+        # return False is wrong since the previous transaction will be successful
+
     return True
 
 
@@ -193,12 +179,10 @@ def approve(owner, spender, amount):
     :param amount: amount>=0
     :return: True means success, False or raising exception means failure.
     """
-    if len(spender) != 20 or len(owner) != 20:
-        raise Exception("address length error")
-    if CheckWitness(owner) == False:
-        return False
-    if amount < 0:
-        return False
+    assert (len(owner) == 20)
+    assert (len(spender) == 20)
+    assert (CheckWitness(owner))
+    assert (amount >= 0)
 
     key = concat(concat(APPROVE_PREFIX, owner), spender)
     Put(ctx, key, amount)
@@ -218,23 +202,24 @@ def transferFrom(spender, from_acct, to_acct, amount):
     :param amount:
     :return:
     """
-    if len(spender) != 20 or len(from_acct) != 20 or len(to_acct) != 20:
-        raise Exception("address length error")
-    if CheckWitness(spender) == False:
-        return False
+    assert (len(to_acct) == 20)
+    assert (len(from_acct) == 20)
+    assert (len(spender) == 20)
+    assert (amount >= 0)
+    assert (CheckWitness(spender))
 
     fromKey = concat(BALANCE_PREFIX, from_acct)
     fromBalance = Get(ctx, fromKey)
-    if amount > fromBalance or amount < 0:
-        return False
+
+    assert (fromBalance >= amount)
 
     approveKey = concat(concat(APPROVE_PREFIX, from_acct), spender)
     approvedAmount = Get(ctx, approveKey)
     toKey = concat(BALANCE_PREFIX, to_acct)
 
-    if amount > approvedAmount:
-        return False
-    elif amount == approvedAmount:
+    assert (approvedAmount >= amount)
+
+    if amount == approvedAmount:
         Delete(ctx, approveKey)
         Put(ctx, fromKey, fromBalance - amount)
     else:
